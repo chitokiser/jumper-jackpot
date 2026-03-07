@@ -94,10 +94,18 @@ export async function recordRound(payload) {
 
   await db.runTransaction(async (tx) => {
     const paymentRef = coll.payments.doc(payload.txHash);
-    const paymentSnap = await tx.get(paymentRef);
+    const walletRef = coll.wallets.doc(userAddress);
+    const userRef = coll.users.doc(userAddress);
+
+    // 모든 읽기 먼저
+    const [paymentSnap, walletSnap] = await Promise.all([
+      tx.get(paymentRef),
+      tx.get(walletRef),
+    ]);
+
     if (paymentSnap.exists) return;
 
-    const userRef = coll.users.doc(userAddress);
+    // 이후 모든 쓰기
     tx.set(
       userRef,
       {
@@ -143,9 +151,6 @@ export async function recordRound(payload) {
       isWinner: payload.finalWinWei > 0n,
       createdAt: Timestamp.now(),
     });
-
-    const walletRef = coll.wallets.doc(userAddress);
-    const walletSnap = await tx.get(walletRef);
     const prev = walletSnap.exists
       ? walletSnap.data()
       : { totalWonWei: "0", totalClaimedWei: "0", claimableWei: "0" };
