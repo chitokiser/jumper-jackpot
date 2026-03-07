@@ -58,14 +58,17 @@ export async function getMerchantWallet(merchantId) {
 }
 
 export async function checkRepeatLimit({ userAddress, limitCount }) {
-  const cutoff = Timestamp.fromDate(new Date(Date.now() - 10 * 60 * 1000));
+  const cutoffMs = Date.now() - 10 * 60 * 1000;
   const qs = await coll.rateLimits
     .where("userAddress", "==", lower(userAddress))
-    .where("createdAt", ">=", cutoff)
-    .count()
     .get();
 
-  const cnt = qs.data().count || 0;
+  const cnt = qs.docs.filter((doc) => {
+    const ts = doc.data().createdAt;
+    if (!ts) return false;
+    return (typeof ts.toMillis === "function" ? ts.toMillis() : Number(ts)) >= cutoffMs;
+  }).length;
+
   return cnt < limitCount;
 }
 
