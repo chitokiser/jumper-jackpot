@@ -204,8 +204,6 @@ export async function getWallet(userAddress) {
 export async function getHistory(userAddress, limit = 50) {
   const snaps = await coll.rounds
     .where("userAddress", "==", lower(userAddress))
-    .orderBy("createdAt", "desc")
-    .limit(limit)
     .get();
 
   const out = [];
@@ -223,7 +221,9 @@ export async function getHistory(userAddress, limit = 50) {
       createdAt: asDateIso(r.createdAt),
     });
   });
-  return out;
+
+  out.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return out.slice(0, limit);
 }
 
 export async function createWithdrawRequest({ userAddress, requestedWei }) {
