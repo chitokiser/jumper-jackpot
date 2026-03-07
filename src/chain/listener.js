@@ -133,15 +133,21 @@ export async function runListenerOnce() {
 
   const logs = await paymentContract.queryFilter(paymentFilter(), fromBlock, toBlock);
 
+  let lastSuccessBlock = fromBlock - 1;
   for (const log of logs) {
     try {
       await processEvent(mapEventLog(log));
+      lastSuccessBlock = Number(log.blockNumber);
     } catch (err) {
       logger.error({ err, txHash: log.transactionHash }, "failed to process payment event");
+      break;
     }
   }
 
-  await setListenerBlock(toBlock);
+  const saveBlock = logs.length === 0 ? toBlock : lastSuccessBlock;
+  if (saveBlock >= fromBlock) {
+    await setListenerBlock(saveBlock);
+  }
 }
 
 export async function runListenerLoop() {
