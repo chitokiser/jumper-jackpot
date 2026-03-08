@@ -8,6 +8,7 @@ import {
   adminApproveWithdraw,
   adminRejectWithdraw,
   adminListClaims,
+  getMyWithdrawals,
 } from "../services/jackpotService.js";
 import { validate, walletQuerySchema, withdrawSchema } from "../middleware/validate.js";
 import { requireAdmin } from "../middleware/adminAuth.js";
@@ -57,6 +58,17 @@ jackpotRouter.post("/withdraw", validate(withdrawSchema), async (req, res, next)
   try {
     const { wallet, amountHex } = req.validated.body;
     const data = await requestWithdraw({ wallet, amountHex });
+    res.json({ ok: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+jackpotRouter.get("/my-claims", validate(walletQuerySchema), async (req, res, next) => {
+  try {
+    const wallet = req.validated.query.wallet;
+    const limit = req.validated.query.limit ?? 50;
+    const data = await getMyWithdrawals(wallet, limit);
     res.json({ ok: true, data });
   } catch (err) {
     next(err);
