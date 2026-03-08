@@ -446,6 +446,29 @@ export async function markClaimRejected(claimId) {
   });
 }
 
+export async function getClaimsList({ status, limitCount = 100 }) {
+  let q = coll.claims.orderBy("createdAt", "desc").limit(limitCount);
+  if (status) q = coll.claims.where("status", "==", status).orderBy("createdAt", "desc").limit(limitCount);
+
+  const snap = await q.get();
+  const out = [];
+  snap.forEach((doc) => {
+    const r = doc.data();
+    out.push({
+      id: doc.id,
+      userAddress: r.userAddress || null,
+      requestedWei: r.requestedWei || "0",
+      approvedWei: r.approvedWei || "0",
+      txHash: r.txHash || null,
+      status: r.status || "unknown",
+      requestedAt: asDateIso(r.requestedAt),
+      approvedAt: r.approvedAt ? asDateIso(r.approvedAt) : null,
+      createdAt: asDateIso(r.createdAt),
+    });
+  });
+  return out;
+}
+
 export async function getPublicStats() {
   const winnerAgg = await coll.rounds.where("isWinner", "==", true).count().get();
   const winnerCount = Number(winnerAgg.data().count || 0);

@@ -10,6 +10,7 @@ import {
   getClaimById,
   markClaimRejected,
   getPublicStats,
+  getClaimsList,
 } from "./jackpotRepo.js";
 import { validateDailyPayoutLimit } from "./securityService.js";
 
@@ -100,4 +101,8 @@ export async function adminRejectWithdraw({ claimId }) {
 
   await markClaimRejected(claimId);
   return { claimId, status: "rejected" };
+}
+
+export async function adminListClaims({ status, limit }) {
+  return getClaimsList({ status: status || null, limitCount: limit ?? 100 });
 }
