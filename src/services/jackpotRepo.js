@@ -112,16 +112,20 @@ export async function checkRepeatLimit({ userAddress, limitCount }) {
 export async function getDailyPayoutWei() {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
+  const startTs = Timestamp.fromDate(start);
 
+  // status 단일 조건 쿼리로 변경 (복합 인덱스 불필요), 날짜는 앱 레벨에서 필터
   const snaps = await coll.claims
     .where("status", "in", ["approved", "paid"])
-    .where("approvedAt", ">=", Timestamp.fromDate(start))
     .get();
 
   let total = 0n;
   snaps.forEach((doc) => {
     const data = doc.data();
-    total += asBigInt(data.approvedWei, 0n);
+    const approvedAt = data.approvedAt;
+    if (approvedAt && approvedAt.seconds >= startTs.seconds) {
+      total += asBigInt(data.approvedWei, 0n);
+    }
   });
   return total;
 }
