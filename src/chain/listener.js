@@ -118,6 +118,8 @@ function paymentFilter() {
   return paymentContract.filters.PaidHex();
 }
 
+const MAX_BLOCK_RANGE = 49000;
+
 export async function runListenerOnce() {
   const networkBlock = await getCurrentBlock();
   const safeToBlock = networkBlock - config.confirmations;
@@ -125,26 +127,38 @@ export async function runListenerOnce() {
 
   const lastSaved = await getListenerBlock();
   const fromBlock = lastSaved > 0 ? lastSaved + 1 : config.startBlock || safeToBlock;
-  const toBlock = Math.max(fromBlock, safeToBlock);
 
-  if (fromBlock > toBlock) return;
+  if (fromBlock > safeToBlock) return;
 
-  logger.info({ fromBlock, toBlock }, "scan payment events");
-
-  const logs = await paymentContract.queryFilter(paymentFilter(), fromBlock, toBlock);
-
+  let chunkFrom = fromBlock;
   let lastSuccessBlock = fromBlock - 1;
-  for (const log of logs) {
-    try {
-      await processEvent(mapEventLog(log));
-      lastSuccessBlock = Number(log.blockNumber);
-    } catch (err) {
-      logger.error({ err, txHash: log.transactionHash }, "failed to process payment event");
-      break;
+  let errorOccurred = false;
+
+  while (chunkFrom <= safeToBlock) {
+    const chunkTo = Math.min(chunkFrom + MAX_BLOCK_RANGE - 1, safeToBlock);
+
+    logger.info({ fromBlock: chunkFrom, toBlock: chunkTo }, "scan payment events");
+
+    const logs = await paymentContract.queryFilter(paymentFilter(), chunkFrom, chunkTo);
+
+    for (const log of logs) {
+      try {
+        await processEvent(mapEventLog(log));
+        lastSuccessBlock = Number(log.blockNumber);
+      } catch (err) {
+        logger.error({ err, txHash: log.transactionHash }, "failed to process payment event");
+        errorOccurred = true;
+        break;
+      }
     }
+
+    if (errorOccurred) break;
+
+    lastSuccessBlock = chunkTo;
+    chunkFrom = chunkTo + 1;
   }
 
-  const saveBlock = logs.length === 0 ? toBlock : lastSuccessBlock;
+  const saveBlock = errorOccurred ? lastSuccessBlock : safeToBlock;
   if (saveBlock >= fromBlock) {
     await setListenerBlock(saveBlock);
   }
