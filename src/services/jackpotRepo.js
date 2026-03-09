@@ -98,14 +98,19 @@ export async function getMerchantWallet(merchantId) {
 }
 
 export async function checkRepeatLimit({ userAddress, limitCount }) {
-  const cutoff = Timestamp.fromDate(new Date(Date.now() - 10 * 60 * 1000));
-  const qs = await coll.rateLimits
+  const cutoffMs = Date.now() - 10 * 60 * 1000;
+  // 단일 필드 쿼리 — 복합 인덱스 불필요
+  const snap = await coll.rateLimits
     .where("userAddress", "==", lower(userAddress))
-    .where("createdAt", ">=", cutoff)
-    .count()
+    .limit(limitCount * 3)
     .get();
 
-  const cnt = qs.data().count || 0;
+  let cnt = 0;
+  snap.forEach((doc) => {
+    const ts = doc.data().createdAt;
+    const ms = ts?.toMillis?.() ?? (ts?.seconds ? ts.seconds * 1000 : 0);
+    if (ms >= cutoffMs) cnt++;
+  });
   return cnt < limitCount;
 }
 
