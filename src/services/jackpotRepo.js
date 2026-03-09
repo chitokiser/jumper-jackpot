@@ -139,20 +139,29 @@ export async function recordRound(payload) {
   const userAddress = lower(payload.userAddress);
 
   await db.runTransaction(async (tx) => {
+    // ── 모든 읽기 먼저 (Firestore 규칙) ──
     const paymentRef = coll.payments.doc(payload.txHash);
-    const paymentSnap = await tx.get(paymentRef);
+    const walletRef  = coll.wallets.doc(userAddress);
+    const [paymentSnap, walletSnap] = await Promise.all([
+      tx.get(paymentRef),
+      tx.get(walletRef),
+    ]);
     if (paymentSnap.exists) return;
 
+    // ── 계산 ──
+    const prev = walletSnap.exists
+      ? walletSnap.data()
+      : { totalWonWei: "0", totalClaimedWei: "0", claimableWei: "0" };
+
+    const prevWon      = asBigInt(prev.totalWonWei, 0n);
+    const prevClaimed  = asBigInt(prev.totalClaimedWei, 0n);
+    const prevClaimable = asBigInt(prev.claimableWei, 0n);
+    const nextWon      = prevWon + payload.finalWinWei;
+    const nextClaimable = prevClaimable + payload.finalWinWei;
+
+    // ── 모든 쓰기 ──
     const userRef = coll.users.doc(userAddress);
-    tx.set(
-      userRef,
-      {
-        walletAddress: userAddress,
-        status: "active",
-        createdAt: Timestamp.now(),
-      },
-      { merge: true },
-    );
+    tx.set(userRef, { walletAddress: userAddress, status: "active", createdAt: Timestamp.now() }, { merge: true });
 
     tx.set(paymentRef, {
       txHash: payload.txHash,
@@ -189,19 +198,6 @@ export async function recordRound(payload) {
       isWinner: payload.finalWinWei > 0n,
       createdAt: Timestamp.now(),
     });
-
-    const walletRef = coll.wallets.doc(userAddress);
-    const walletSnap = await tx.get(walletRef);
-    const prev = walletSnap.exists
-      ? walletSnap.data()
-      : { totalWonWei: "0", totalClaimedWei: "0", claimableWei: "0" };
-
-    const prevWon = asBigInt(prev.totalWonWei, 0n);
-    const prevClaimed = asBigInt(prev.totalClaimedWei, 0n);
-    const prevClaimable = asBigInt(prev.claimableWei, 0n);
-
-    const nextWon = prevWon + payload.finalWinWei;
-    const nextClaimable = prevClaimable + payload.finalWinWei;
 
     tx.set(walletRef, {
       userAddress,
