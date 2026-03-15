@@ -12,14 +12,44 @@ import {
   getPublicStats,
   getClaimsList,
   getUserClaims,
+  getLastKnownBalanceWei,
 } from "./jackpotRepo.js";
 import { validateDailyPayoutLimit } from "./securityService.js";
 
-export async function getCurrentJackpot() {
-  const balanceWei = await getContractHexBalance();
-  const jackpotWei = balanceWei / 2n;
-  const cfg = await getConfig();
+// RPC 호출에 ms 제한 — 초과 시 캐시 fallback
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("RPC_TIMEOUT")), ms),
+    ),
+  ]);
+}
 
+export async function getCurrentJackpot() {
+  // ── 1. 잔액: RPC → Firestore 캐시 → 0 순서로 fallback ──
+  let balanceWei = 0n;
+  let rpcLive = true;
+  try {
+    balanceWei = await withTimeout(getContractHexBalance(), 5_000);
+  } catch {
+    rpcLive = false;
+    try { balanceWei = await getLastKnownBalanceWei(); } catch { /* 0n */ }
+  }
+
+  // ── 2. config: Firestore → default 순서로 fallback ──
+  let cfg;
+  try {
+    cfg = await getConfig();
+  } catch {
+    cfg = {
+      payoutScale: config.defaults.payoutScale,
+      maxWinPercent: config.defaults.maxWinPercent,
+      enabled: config.defaults.enabled,
+    };
+  }
+
+  const jackpotWei = balanceWei / 2n;
   return {
     contractBalanceWei: balanceWei.toString(),
     contractBalanceHex: ethers.formatUnits(balanceWei, config.hexDecimals),
@@ -28,6 +58,7 @@ export async function getCurrentJackpot() {
     payoutScale: cfg.payoutScale.toString(),
     maxWinPercent: cfg.maxWinPercent,
     enabled: cfg.enabled,
+    rpcLive,
   };
 }
 

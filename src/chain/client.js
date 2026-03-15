@@ -2,12 +2,39 @@ import { ethers } from "ethers";
 import { config } from "../config.js";
 import { ERC20_ABI, PAYMENT_EVENT_ABI } from "./abi.js";
 
-const rpcRequest = new ethers.FetchRequest(config.rpcUrl);
-rpcRequest.timeout = 30_000;
+// opBNB 공개 RPC 목록 — 주 URL 실패 시 순서대로 시도
+const RPC_FALLBACKS = [
+  config.rpcUrl,
+  "https://opbnb.publicnode.com",
+  "https://opbnb-mainnet-rpc.bnbchain.org",
+].filter((v, i, a) => v && a.indexOf(v) === i); // dedupe
 
-export const provider = new ethers.JsonRpcProvider(rpcRequest, config.chainId, {
-  staticNetwork: ethers.Network.from(config.chainId),
-});
+function makeFetchReq(url) {
+  const r = new ethers.FetchRequest(url);
+  r.timeout = 8_000;
+  return r;
+}
+
+function makeSingleProvider(url) {
+  return new ethers.JsonRpcProvider(makeFetchReq(url), config.chainId, {
+    staticNetwork: true,
+    pollingInterval: config.pollIntervalMs,
+  });
+}
+
+// FallbackProvider: 첫 번째 응답을 사용 (quorum=1)
+export const provider = RPC_FALLBACKS.length > 1
+  ? new ethers.FallbackProvider(
+      RPC_FALLBACKS.map((url, i) => ({
+        provider: makeSingleProvider(url),
+        priority: i + 1,
+        stallTimeout: 3_000,
+        weight: 1,
+      })),
+      config.chainId,
+      { quorum: 1 },
+    )
+  : makeSingleProvider(RPC_FALLBACKS[0]);
 
 export const paymentContract = new ethers.Contract(
   config.paymentContractAddress,
