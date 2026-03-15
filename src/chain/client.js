@@ -2,7 +2,10 @@ import { ethers } from "ethers";
 import { config } from "../config.js";
 import { ERC20_ABI, PAYMENT_EVENT_ABI } from "./abi.js";
 
-export const provider = new ethers.JsonRpcProvider(config.rpcUrl, config.chainId, {
+const rpcRequest = new ethers.FetchRequest(config.rpcUrl);
+rpcRequest.timeout = 30_000;
+
+export const provider = new ethers.JsonRpcProvider(rpcRequest, config.chainId, {
   staticNetwork: ethers.Network.from(config.chainId),
 });
 

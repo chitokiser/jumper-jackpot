@@ -171,7 +171,11 @@ export async function runListenerLoop() {
     try {
       await runListenerOnce();
     } catch (err) {
-      logger.error({ err }, "listener cycle failed");
+      if (err?.code === "TIMEOUT") {
+        logger.warn({ err }, "listener cycle skipped: RPC timeout");
+      } else {
+        logger.error({ err }, "listener cycle failed");
+      }
     }
     await new Promise((r) => setTimeout(r, config.pollIntervalMs));
   }
