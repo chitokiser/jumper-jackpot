@@ -11,6 +11,21 @@ import {
 import { validatePaymentForJackpot } from "../services/securityService.js";
 import { hmacRandom, calcJackpotWin } from "../services/jackpotMath.js";
 
+function isRpcUnavailable(err) {
+  if (!err) return false;
+  const code = err.code ?? "";
+  const msg = err.message ?? "";
+  return (
+    code === "TIMEOUT" ||
+    msg.includes("no runners") ||
+    msg.includes("timeout") ||
+    msg.includes("TIMEOUT") ||
+    msg.includes("network") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("ENOTFOUND")
+  );
+}
+
 function toMerchantId(rawValue) {
   if (typeof rawValue === "string" && rawValue.startsWith("0x") && rawValue.length === 66) {
     try {
@@ -171,8 +186,8 @@ export async function runListenerLoop() {
     try {
       await runListenerOnce();
     } catch (err) {
-      if (err?.code === "TIMEOUT" || err?.message?.includes("no runners")) {
-        logger.warn({ err }, "listener cycle skipped: RPC unavailable");
+      if (isRpcUnavailable(err)) {
+        logger.warn({ msg: err?.message }, "listener cycle skipped: RPC unavailable");
       } else {
         logger.error({ err }, "listener cycle failed");
       }
