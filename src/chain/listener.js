@@ -171,8 +171,8 @@ export async function runListenerLoop() {
     try {
       await runListenerOnce();
     } catch (err) {
-      if (err?.code === "TIMEOUT") {
-        logger.warn({ err }, "listener cycle skipped: RPC timeout");
+      if (err?.code === "TIMEOUT" || err?.message?.includes("no runners")) {
+        logger.warn({ err }, "listener cycle skipped: RPC unavailable");
       } else {
         logger.error({ err }, "listener cycle failed");
       }

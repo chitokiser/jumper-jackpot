@@ -9,9 +9,12 @@ const RPC_FALLBACKS = [
   "https://opbnb-mainnet-rpc.bnbchain.org",
 ].filter((v, i, a) => v && a.indexOf(v) === i); // dedupe
 
+const FETCH_TIMEOUT_MS = 8_000;
+const STALL_TIMEOUT_MS = FETCH_TIMEOUT_MS + 2_000; // stall은 fetch보다 늦게 터져야 함
+
 function makeFetchReq(url) {
   const r = new ethers.FetchRequest(url);
-  r.timeout = 8_000;
+  r.timeout = FETCH_TIMEOUT_MS;
   return r;
 }
 
@@ -28,7 +31,7 @@ export const provider = RPC_FALLBACKS.length > 1
       RPC_FALLBACKS.map((url, i) => ({
         provider: makeSingleProvider(url),
         priority: i + 1,
-        stallTimeout: 3_000,
+        stallTimeout: STALL_TIMEOUT_MS,
         weight: 1,
       })),
       config.chainId,
