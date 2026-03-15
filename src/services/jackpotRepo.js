@@ -499,6 +499,15 @@ export async function getClaimsList({ status, limitCount = 100 }) {
   return out;
 }
 
+export async function getLastKnownBalanceWei() {
+  const cached = cacheGet("lastBalance");
+  if (cached !== null) return cached;
+  const snap = await coll.rounds.orderBy("createdAt", "desc").limit(1).get();
+  const wei = snap.empty ? 0n : asBigInt(snap.docs[0].data()?.contractBalanceWei, 0n);
+  cacheSet("lastBalance", wei, 30_000); // 30s cache
+  return wei;
+}
+
 export async function getPublicStats() {
   const winnerAgg = await coll.rounds.where("isWinner", "==", true).count().get();
   const winnerCount = Number(winnerAgg.data().count || 0);
